@@ -1,60 +1,127 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import PurchaseForm from './PurchaseForm';
 import PurchaseHistoryTable from './PurchaseHistoryTable';
 import { useToast } from "@/components/ui/use-toast";
 import useLocalStorage from '@/hooks/useLocalStorage';
 import { motion } from 'framer-motion';
 import { useLanguage } from '@/lib/i18n.jsx';
+import { purchasesService, inventoryService } from '../lib/database';
 
 const Purchases = () => {
+  const [purchases, setPurchases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [formData, setFormData] = useState({
+    item_name: '',
+    quantity: '',
+    unit: 'kg',
+    price: '',
+    supplier: '',
+    date: new Date().toISOString().split('T')[0]
+  });
   const [inventory, setInventory] = useLocalStorage('kitchenInventory', []);
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  const handleAddPurchase = ({ itemName, quantity, unit, unitPrice, purchaseDate, totalPrice }) => {
-    const parsedQuantity = parseFloat(quantity);
-    const parsedUnitPrice = parseFloat(unitPrice);
+  useEffect(() => {
+    loadPurchases();
+  }, []);
 
-    if (!itemName || isNaN(parsedQuantity) || parsedQuantity <= 0 || !unit || isNaN(parsedUnitPrice) || parsedUnitPrice < 0 || !purchaseDate) {
-      toast({
-        title: t('error'),
-        description: t('fillPurchaseDetails'),
-        variant: "destructive",
-      });
-      return false; // Indicate failure
+  const loadPurchases = async () => {
+    try {
+      setLoading(true);
+      const data = await purchasesService.getPurchases();
+      setPurchases(data);
+      setError(null);
+    } catch (err) {
+      setError('Failed to load purchases');
+      console.error('Error loading purchases:', err);
+    } finally {
+      setLoading(false);
     }
-
-    const newPurchase = {
-      id: Date.now(),
-      type: 'purchase',
-      itemName,
-      quantity: parsedQuantity,
-      unit,
-      unitPrice: parsedUnitPrice, // Store unit price
-      price: totalPrice, // Store calculated total price
-      date: purchaseDate.toISOString().split('T')[0],
-    };
-
-    setInventory([...inventory, newPurchase]);
-
-    toast({
-      title: t('success'),
-      description: t('purchaseAdded', { itemName: itemName }),
-    });
-
-    return true; // Indicate success
   };
 
-   const handleDeletePurchase = (id) => {
-    setInventory(inventory.filter(item => item.id !== id));
-    toast({
-      title: t('deleted'),
-      description: t('purchaseRemoved'),
-    });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      // Add purchase
+      const newPurchase = await purchasesService.addPurchase(formData);
+      setPurchases(prev => [...prev, newPurchase]);
+
+      // Update inventory
+      const existingItem = await inventoryService.getItemByName(formData.item_name);
+      if (existingItem) {
+        // Update existing item
+        await inventoryService.updateItem(existingItem.id, {
+          quantity: existingItem.quantity + parseFloat(formData.quantity),
+          last_updated: new Date().toISOString()
+        });
+      } else {
+        // Add new item to inventory
+        await inventoryService.addItem({
+          name: formData.item_name,
+          quantity: parseFloat(formData.quantity),
+          unit: formData.unit,
+          category: 'General',
+          last_updated: new Date().toISOString()
+        });
+      }
+
+      // Reset form
+      setFormData({
+        item_name: '',
+        quantity: '',
+        unit: 'kg',
+        price: '',
+        supplier: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+      setError(null);
+
+      toast({
+        title: t('success'),
+        description: t('purchaseAdded', { itemName: formData.item_name }),
+      });
+    } catch (err) {
+      setError('Failed to add purchase');
+      console.error('Error adding purchase:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const purchaseHistory = inventory.filter(item => item.type === 'purchase').sort((a, b) => new Date(b.date) - new Date(a.date));
+  const handleDelete = async (id) => {
+    try {
+      setLoading(true);
+      await purchasesService.deletePurchase(id);
+      setPurchases(prev => prev.filter(p => p.id !== id));
+      setError(null);
+
+      toast({
+        title: t('deleted'),
+        description: t('purchaseRemoved'),
+      });
+    } catch (err) {
+      setError('Failed to delete purchase');
+      console.error('Error deleting purchase:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const purchaseHistory = purchases.filter(item => item.type === 'purchase').sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  if (loading) return <div className="text-center">Loading...</div>;
+  if (error) return <div className="text-red-500">{error}</div>;
 
   return (
     <motion.div
@@ -63,10 +130,10 @@ const Purchases = () => {
       transition={{ duration: 0.5 }}
       className="space-y-6"
     >
-      <PurchaseForm onAddPurchase={handleAddPurchase} />
+      <PurchaseForm onSubmit={handleSubmit} onInputChange={handleChange} formData={formData} />
       <PurchaseHistoryTable
         purchaseHistory={purchaseHistory}
-        onDeletePurchase={handleDeletePurchase}
+        onDeletePurchase={handleDelete}
       />
     </motion.div>
   );

@@ -7,6 +7,8 @@
   NODE_VERSION = "18"
   NPM_FLAGS = "--legacy-peer-deps"
   NODE_ENV = "production"
+  VITE_SUPABASE_URL = "https://your-project-id.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "your-anon-key"
 
 [[redirects]]
   from = "/*"
