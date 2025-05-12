@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +9,7 @@ import { motion } from 'framer-motion';
 import { UtensilsCrossed, PlusCircle, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/i18n';
+import { mealLogService } from '../lib/database';
 
 const MealLogForm = ({ inventory, onLogMeal }) => {
   const [mealType, setMealType] = useState('');
@@ -73,7 +73,7 @@ const MealLogForm = ({ inventory, onLogMeal }) => {
    };
 
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!mealType || !mealDate || !studentCount || itemsUsed.some(item => !item.name || !item.quantity)) {
       toast({ title: t('error'), description: t('fillMealDetails'), variant: "destructive" });
@@ -131,17 +131,21 @@ const MealLogForm = ({ inventory, onLogMeal }) => {
       costPerStudent: costPerStudent,
     };
 
-    onLogMeal(newMealLog);
-
-    toast({
-      title: t('success'),
-      description: t('mealLogged', { mealType: mealType, date: mealDate.toLocaleDateString(), cost: formatCurrency(mealCost) }),
-    });
-
-    setMealType('');
-    setMealDate(new Date());
-    setStudentCount('');
-    setItemsUsed([{ name: '', quantity: '' }]);
+    try {
+      await mealLogService.addMealLog(newMealLog);
+      toast({
+        title: t('success'),
+        description: t('mealLogged', { mealType: mealType, date: mealDate.toLocaleDateString(), cost: formatCurrency(mealCost) }),
+      });
+      setMealType('');
+      setMealDate(new Date());
+      setStudentCount('');
+      setItemsUsed([{ name: '', quantity: '' }]);
+      if (onLogMeal) onLogMeal(newMealLog);
+    } catch (error) {
+      console.error('Error adding meal log:', error);
+      toast({ title: t('error'), description: t('mealLogError'), variant: "destructive" });
+    }
   };
 
   return (

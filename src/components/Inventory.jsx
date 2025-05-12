@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableCaption } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/card.jsx";
 import { Button } from "@/components/ui/button";
@@ -10,21 +9,98 @@ import { exportToCSV } from '@/lib/export';
 import { formatCurrency } from '@/lib/currency';
 import { useLanguage } from '@/lib/i18n';
 import { useToast } from "@/components/ui/use-toast";
-
+import { inventoryService } from '../lib/database';
 
 const Inventory = () => {
-  const [inventory] = useLocalStorage('kitchenInventory', []);
-  const { t } = useLanguage();
+  const [inventory, setInventory] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
-  const getAverageCost = (itemName) => {
-      const purchases = inventory.filter(item => item.type === 'purchase' && item.itemName.toLowerCase() === itemName.toLowerCase() && item.quantity > 0);
-      if (purchases.length === 0) return 0;
-      const totalCost = purchases.reduce((sum, p) => sum + p.price, 0);
-      const totalQuantity = purchases.reduce((sum, p) => sum + p.quantity, 0);
-      return totalQuantity > 0 ? totalCost / totalQuantity : 0;
+  useEffect(() => {
+    loadInventory();
+  }, []);
+
+  const loadInventory = async () => {
+    try {
+      setLoading(true);
+      const data = await inventoryService.getInventory();
+      setInventory(data);
+    } catch (error) {
+      console.error('Error loading inventory:', error);
+      toast({
+        title: t('error'),
+        description: t('loadInventoryError'),
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
+  const handleAddItem = async (itemData) => {
+    try {
+      const newItem = await inventoryService.addItem(itemData);
+      setInventory(prev => [...prev, newItem]);
+      toast({
+        title: t('success'),
+        description: t('itemAdded')
+      });
+    } catch (error) {
+      console.error('Error adding item:', error);
+      toast({
+        title: t('error'),
+        description: t('addItemError'),
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleUpdateItem = async (id, updates) => {
+    try {
+      const updatedItem = await inventoryService.updateItem(id, updates);
+      setInventory(prev => prev.map(item => 
+        item.id === id ? updatedItem : item
+      ));
+      toast({
+        title: t('success'),
+        description: t('itemUpdated')
+      });
+    } catch (error) {
+      console.error('Error updating item:', error);
+      toast({
+        title: t('error'),
+        description: t('updateItemError'),
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteItem = async (id) => {
+    try {
+      await inventoryService.deleteItem(id);
+      setInventory(prev => prev.filter(item => item.id !== id));
+      toast({
+        title: t('success'),
+        description: t('itemDeleted')
+      });
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast({
+        title: t('error'),
+        description: t('deleteItemError'),
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getAverageCost = (itemName) => {
+    const purchases = inventory.filter(item => item.type === 'purchase' && item.itemName.toLowerCase() === itemName.toLowerCase() && item.quantity > 0);
+    if (purchases.length === 0) return 0;
+    const totalCost = purchases.reduce((sum, p) => sum + p.price, 0);
+    const totalQuantity = purchases.reduce((sum, p) => sum + p.quantity, 0);
+    return totalQuantity > 0 ? totalCost / totalQuantity : 0;
+  };
 
   const calculateStock = () => {
     const stock = {};
@@ -51,7 +127,6 @@ const Inventory = () => {
          });
        }
      });
-
 
     return Object.entries(stock)
                  .filter(([, data]) => data.quantity > 0)
@@ -85,7 +160,6 @@ const Inventory = () => {
          toast({ title: t('error'), description: "No inventory data to export.", variant: "destructive" });
      }
   };
-
 
   return (
     <motion.div

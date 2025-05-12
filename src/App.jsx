@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toaster } from "@/components/ui/toaster";
@@ -16,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-
+import { SupabaseTest } from './components/SupabaseTest'
 
 function App() {
   const { t, language, setLanguage } = useLanguage();
@@ -84,6 +83,7 @@ function App() {
        <footer className="text-center mt-12 text-sm text-muted-foreground">
             {t('footerText')} - &copy; {new Date().getFullYear()}
        </footer>
+       <SupabaseTest />
     </div>
   );
 }
